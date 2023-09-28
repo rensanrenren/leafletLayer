@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Sample Map</title>
+    <meta charset="UTF-8">
+    <!-- LeafletのCSS読み込み -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <!-- LeafletのCSS読み込み -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!--Leafletクラスタリング-->
+    <script src="https://unpkg.com/leaflet.markercluster@1.3.0/dist/leaflet.markercluster.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.3.0/dist/leaflet.markercluster.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.3.0/dist/leaflet.markercluster.Default.css">
+
+
+</head>
+<body>
+    <!--地図を表示するdiv宣言-->
+    <div id="map" style="height: 80vh;"></div>
+
+    <script>
+    
+
+
+    //背景地図のデータ
+    const baseLayers = {
+        OpenStreetMap: L.tileLayer(
+            'https://tile.openstreetmap.jp/{z}/{x}/{y}.png',
+
+            {
+                maxZoom: 19,
+                attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            },
+        ),
+        '地理院地図': L.tileLayer(
+            'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',
+
+            {
+                maxZoom: 18,
+                attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a>',
+            },
+        ),
+
+        空中写真: L.tileLayer(
+            'https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg',
+            {
+                maxZoom: 17,
+                attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a>',
+
+            },
+        ),
+
+    };
+
+    const map = L.map('map').setView([35.6895, 139.6917], 5);
+
+    map.addLayer(baseLayers['OpenStreetMap']); //OSMを初期化
+
+    //レイヤーの切り替え
+    const layersControl = L.control.layers(baseLayers, [], {collapsed: false}).addTo(map);
+
+
+
+
+    //人口集中データ読み込み(geojson)
+    const markers = L.markerClusterGroup();
+
+    fetch('./A16-15_00_DID.geojson')
+        .then((res) => res.json())
+        .then((json) => {
+
+            //geojsonレイヤー作成
+            const polygon = L.geoJSON(json, {
+                style: (feature) => ({
+                    color: 'red',
+                    stroke: false,
+
+                    //人口を面積で割った値でポリゴンの濃さを変える
+                    fillOpacity:
+                        feature.properties['人口'] /
+                        feature.properties['面積'] / 
+                        20000,
+                }),
+
+                
+            })
+                //ポップアップで人口を表示
+                L.geoJSON(json)
+                .bindPopup(
+                    (layer) => '人口:' + layer.feature.properties['人口']).addTo(map);
+                
+
+                //レイヤー一覧に追加
+                layersControl.addOverlay(polygon, '人口集中地区');
+        })
+
+
+        .catch((error) => {console.error("geojsonの読み込みに失敗:", error);});
+
+        //鉄道マップをレイヤーで追加する
+        //事業者種別コード別に色を塗り分ける
+        const colorDict = {
+            1: 'green',
+            2: 'blue',
+            3: 'red',
+            4: 'orange',
+            5: 'purple',
+        };
+
+        //事業者種別コード別に線の太さを書き分ける
+        const weightDict = {
+            1: 10,
+            2: 7,
+            3: 4,
+            4: 4,
+            5: 4,
+        };
+
+        fetch('N02-21_RailroadSection.geojson') //鉄道データ
+            .then((res) => res.json())
+            .then((json) => {
+                //geojsonレイヤーを作成
+                const line = L.geoJSON(json, {
+                    style: (feature) => ({
+                        weight: weightDict[feature.properties.N02_002], //事業者種別コードから線の太さを得る
+                        color: colorDict[feature.properties.N02_002], //事業者種別コードから線の色を得る
+                    }),
+                })
+                //ポップアップで事業者名と路線名を表示
+                .bindPopup(
+                    (layer) => layer.feature.properties.N02_004 + '<br />' + layer.feature.properties.N02_003, 
+                ).addTo(map);
+                //レイヤー一覧に追加
+                layersControl.addOverlay(line, '鉄道データ');
+            });
+
+
+    </script>
+
+</body>
+</html>
